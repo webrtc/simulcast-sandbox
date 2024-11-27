@@ -1,0 +1,1279 @@
+<html>
+  <head>
+    <title>WebRTC Playground</title>
+    <meta charset="UTF-8">
+    <style>
+      body {
+        font-family: monospace;
+        line-height: 2em;
+      }
+
+      .encodingBox {
+        display: inline-block;
+        border: 1px solid black;
+        margin: 5px 5px 5px 5px;
+        padding: 5px 5px 5px 5px;
+        max-width: 90%;
+      }
+
+      video {
+        max-width: 600px;
+      }
+
+      button, input, select {
+        font-family: inherit;
+      }
+
+      summary {
+        font-weight: bold;
+      }
+
+      .VideoPlayer {
+        position: relative;
+      }
+
+      .VideoPlayer button {
+        color: darkgray;
+        border-width: medium;
+        border-color: white;
+        border-style: hidden;
+        background-color: transparent;
+        text-shadow:
+          1px 1px 1px #000,
+          -1px 1px 1px #000,
+          -1px -1px 0 #000,
+          1px -1px 0 #000;
+        font-size: 1.8em;
+        line-height: 1.5em;
+        vertical-align: middle;
+        filter: drop-shadow(2px 4px 6px black)
+      }
+
+
+      .VideoPlayer button:hover {
+        color: white;
+      }
+
+      .RecordButton {
+        font-size: 1em !important;
+      }
+      .RecordButton:hover {
+        filter: brightness(1.2) drop-shadow(2px 4px 6px black);
+      }
+
+      .VideoPlayerControls {
+        position:absolute;
+        z-index: 1;
+        bottom: 0px;
+        right: 0px;
+        margin-right:5px;
+      }
+
+      #recordingList {
+        margin-left: 10px;
+      }
+
+      .blink {
+        animation: blink 1s linear infinite;
+      }
+
+      @keyframes blink {
+        25% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 0;
+        }
+        75% {
+          opacity: 0.5;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <table>
+      <tr>
+        <td>
+          <div class="VideoPlayer">
+            <video id="videoSource" autoplay muted></video>
+            <div class="VideoPlayerControls">
+              <button onclick="javascript:videoFullscreen(this)" title="Fullscreen">⛶</button>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div class="VideoPlayer" style="display: none">
+            <video id="videoMerged" autoplay></video>
+            <div class="VideoPlayerControls">
+              <button class="RecordButton" onclick="javascript:videoRecord(this)" title="Record">🔴</button>
+              <button onclick="javascript:videoFullscreen(this)" title="Fullscreen">⛶</button>
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <span id="videoSourceSize">0x0</span>
+          <span id="videoSourceFps">0</span> fps
+        </td>
+        <td>
+          <span id="videoMergedSize">0x0</span>
+          <span id="videoMergedFps">0</span> fps
+        </td>
+      </tr>
+      <tr>
+        <td id="videoSourceBps">0 bps</td>
+        <td id="videoMergedBps">0 bps</td>
+      </tr>
+    </table>
+    <button id="start">Start</button>
+    <button id="stop">Stop</button> |
+    <button id="copyBookmark">Copy Bookmark</button>
+    <button id="copyBookmarkWithDevice">Copy Bookmark (+device)</button>
+    <br />
+    Source:
+    <select id="captureDevice">
+      <option value="default">Default Device</option>
+    </select>
+    <select id="resolution">
+      <optgroup label="User Media">
+        <option value="WHQVGA">240x135 (WHQVGA)</option>
+        <option value="WQVGA">320x180 (WQVGA)</option>
+        <option value="QVGA">320x240 (QVGA)</option>
+        <option value="WHVGA">480x270 (WHVGA)</option>
+        <option value="HVGA">480x360 (HVGA)</option>
+        <option value="WVGA">640x360 (WVGA)</option>
+        <option value="VGA">640x480 (VGA)</option>
+        <option value="HD" selected>1280x720 (HD)</option>
+        <option value="FullHD">1920x1080 (FullHD)</option>
+        <option value="4K">4096x2160 (4K)</option>
+        <option value="8K">7680x4320 (8K)</option>
+      </optgroup>
+      <optgroup label="Display Media">
+        <option value="screen">Screen</option>
+        <option value="screen-FullHD">Screen (FullHD)</option>
+        <option value="screen-HD">Screen (HD)</option>
+      </optgroup>
+      <optgroup label="Display Media / Conference">
+        <option value="screen-conference">Screen (conference)</option>
+        <option value="screen-conference-FullHD">
+          Screen (FullHD, conference)
+        </option>
+        <option value="screen-conference-HD">Screen (HD, conference)</option>
+      </optgroup>
+    </select>
+    <select id="captureFramerate">
+      <option value="5">5 FPS</option>
+      <option value="10">10 FPS</option>
+      <option value="12">12 FPS</option>
+      <option value="15">15 FPS</option>
+      <option value="20">20 FPS</option>
+      <option value="24">24 FPS</option>
+      <option value="30" selected>30 FPS</option>
+      <option value="60">60 FPS</option>
+    </select>
+    <select id="contentHint">
+      <option value="">No Hint</option>
+      <option value="motion">Motion</option>
+      <option value="detail">Detail</option>
+      <option value="text">Text</option>
+    </select>
+    <br />
+    Transceiver:
+    <select id="codec">
+      <option value="VP8">VP8</option>
+      <option value="VP9">VP9</option>
+      <option value="AV1">AV1</option>
+      <option value="H264">H264</option>
+    </select> |
+    Sender:
+    <button id="getParameters">Get Parameters</button>
+    <button id="setParameters">Set Parameters</button> | Receiver:
+    <button id="receiverGetParameters">Get Parameters</button>
+    <br />
+    Simulcast:
+    <button id="addLayer">Add layer</button>
+    <button id="removeLayer">Remove layer</button> | Layers:
+    <select id="splitLayer">
+      <option value="merged">Merged</option>
+      <option value="split">Split</option>
+    </select>
+    <br />
+    <label
+      >Degradation Preference:
+      <select id="degradationPreference">
+        <option value="" selected>None</option>
+        <option value="balanced">Balanced</option>
+        <option value="maintain-framerate">Maintain framerate</option>
+        <option value="maintain-resolution">Maintain resolution</option>
+      </select>
+    </label>
+    <br />
+    <div class="encodingBox" data-layer="0">
+      Layer
+      <span id="layerId">0</span> <span id="videoSize">0x0</span>
+      <span id="videoFps">0</span> fps
+      <br />
+      <div id="videoPreview" class="VideoPlayer" style="display: none">
+        <video id="video" autoplay muted></video>
+        <div class="VideoPlayerControls">
+          <button class="RecordButton" onclick="javascript:videoRecord(this)" title="Record">🔴</button>
+          <button onclick="javascript:videoFullscreen(this)" title="Fullscreen">⛶</button>
+        </div>
+      </div>
+      <details open>
+        <summary>Encoder settings</summary>
+        <label
+          >codec:
+          <select id="forceCodec" style="width: 10em">
+            <option value="">None</option>
+          </select>
+        </label>
+        <br />
+        <label
+          >maxBitrate (bps):
+          <input type="number" id="maxBitrate" value="3000000" size="8" style="width: 8em;" />
+        </label>
+        <br />
+        <label
+          >scaleResolutionDownBy:
+          <input type="number" id="scaleResolutionDownBy" value="1" size="3"  style="width: 5em;" />
+        </label>
+        <br />
+        <label
+          >maxFramerate (fps):
+          <input type="number" id="maxFramerate" value="60" size="3" style="width: 7em;" />
+        </label>
+        <br />
+        <label
+          >scalabilityMode:
+          <select id="scalabilityMode" style="width: 9em;">
+            <option value="">None</option>
+            <option value="L1T1">L1T1</option>
+            <option value="L1T2">L1T2</option>
+            <option value="L1T3">L1T3</option>
+            <option value="L2T1">L2T1</option>
+            <option value="L2T1h">L2T1h</option>
+            <option value="L2T1_KEY">L2T1_KEY</option>
+            <option value="L2T2">L2T2</option>
+            <option value="L2T2h">L2T2h</option>
+            <option value="L2T2_KEY">L2T2_KEY</option>
+            <option value="L2T2_KEY_SHIFT">L2T2_KEY_SHIFT</option>
+            <option value="L2T3">L2T3</option>
+            <option value="L2T3h">L2T3h</option>
+            <option value="L2T3_KEY">L2T3_KEY</option>
+            <option value="L2T3_KEY_SHIFT">L2T3_KEY_SHIFT</option>
+            <option value="L3T1">L3T1</option>
+            <option value="L3T1h">L3T1h</option>
+            <option value="L3T1_KEY">L3T1_KEY</option>
+            <option value="L3T2">L3T2</option>
+            <option value="L3T2h">L3T2h</option>
+            <option value="L3T2_KEY">L3T2_KEY</option>
+            <option value="L3T2_KEY_SHIFT">L3T2_KEY_SHIFT</option>
+            <option value="L3T3">L3T3</option>
+            <option value="L3T3h">L3T3h</option>
+            <option value="L3T3_KEY">L3T3_KEY</option>
+            <option value="L3T3_KEY_SHIFT">L3T3_KEY_SHIFT</option>
+            <option value="S2T1">S2T1</option>
+            <option value="S2T1h">S2T1h</option>
+            <option value="S2T2">S2T2</option>
+            <option value="S2T2h">S2T2h</option>
+            <option value="S2T3">S2T3</option>
+            <option value="S2T3h">S2T3h</option>
+            <option value="S3T1">S3T1</option>
+            <option value="S3T1h">S3T1h</option>
+            <option value="S3T2">S3T2</option>
+            <option value="S3T2h">S3T2h</option>
+            <option value="S3T3">S3T3</option>
+            <option value="S3T3h">S3T3h</option>
+          </select>
+        </label>
+        <br />
+        <label
+          >Active:
+          <select id="active">
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+        <br />
+        <label
+          >priority:
+          <select id="priority">
+            <option value="very-low">Very Low</option>
+            <option value="low" selected>Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </details>
+      <details>
+        <summary>Encoder stats</summary>
+        <span id="stats">No stats available yet.</span>
+      </details>
+    </div>
+    <br />
+    <div id="recordingListBox" style="display: none">
+      <details open>
+        <summary>Recordings</summary>
+        <div id="recordingList">
+        </div>
+      </details>
+    </div>
+    <div id="div"></div>
+
+    <script>
+      const constraints = {
+        'WHQVGA': {
+          video: {
+            width: 240,
+            height: 135,
+          },
+        },
+        'WQVGA': {
+          video: {
+            width: 320,
+            height: 180,
+          },
+        },
+        'QVGA': {
+          video: {
+            width: 320,
+            height: 240,
+          },
+        },
+        'WHVGA': {
+          video: {
+            width: 480,
+            height: 270,
+          },
+        },
+        'HVGA': {
+          video: {
+            width: 480,
+            height: 360,
+          },
+        },
+        'WVGA': {
+          video: {
+            width: 640,
+            height: 360,
+          },
+        },
+        'VGA': {
+          video: {
+            width: 640,
+            height: 480,
+          },
+        },
+        'HD': {
+          video: {
+            width: 1280,
+            height: 720,
+          },
+        },
+        'FullHD': {
+          video: {
+            width: 1920,
+            height: 1080,
+          },
+        },
+        '4K': {
+          video: {
+            width: 4096,
+            height: 2160,
+          },
+        },
+        '8K': {
+          video: {
+            width: 7680,
+            height: 4320,
+          },
+        },
+        'screen': {
+          video: true,
+        },
+        'screen-FullHD': {
+          video: {width: {max: 1920}},
+        },
+        'screen-HD': {
+          video: {width: {max: 1280}},
+        },
+        'screen-conference': {
+          video: true,
+        },
+        'screen-conference-FullHD': {
+          video: {width: {max: 1920}},
+        },
+        'screen-conference-HD': {
+          video: {width: {max: 1280}},
+        },
+      };
+
+      let pc1;
+      let pc2;
+      let stream;
+      let transceiver;
+      let sender;
+      let asender;
+      let lastBitrateMesurementTime;
+      let lastBytesSent;
+      let lastBytesReceived;
+      let streamResolution;
+      let bookmarkDevice;
+      let prevReport = null;
+      const intervals = [];
+      let videoSourceInterval = null;
+      const recorders = {};
+      const recordings = [];
+
+      const stopPeerConnection = () => {
+        if (pc1) {
+          pc1.close();
+        }
+        if (pc2) {
+          videoMerged.srcObject = null;
+          pc2.close();
+        }
+
+        const layers = document.querySelectorAll('div[data-layer]');
+        for (const layer of layers) {
+          layer.querySelector('#videoPreview').style.display = 'none';
+        }
+
+        videoMerged.closest(".VideoPlayer").style.display = splitLayer.value == 'merged' ? "inline" : "none";
+
+        for (const interval of intervals) {
+          window.clearInterval(interval);
+        }
+        intervals.length = 0;
+      };
+
+      const removeTilde = (r) => r.startsWith('~') ? r.substring(1) : r;
+
+      const setupPeerConnection = async () => {
+        stopPeerConnection();
+
+        pc1 = new RTCPeerConnection({
+          sdpSemantics: 'unified-plan',
+        });
+        pc2 = new RTCPeerConnection({
+          sdpSemantics: 'unified-plan',
+        });
+
+
+        const refreshEncodingStats = (currReport) => {
+          const encodings = sender.getParameters().encodings;
+          for (let layerId = 0; layerId < encodings.length; ++layerId) {
+            const statsSpan = document.querySelector(`div[data-layer="${layerId}"]`).querySelector('#stats');
+
+            try {
+              const currRtp = [...currReport.values()].find(s => {
+                return s.type == 'outbound-rtp' &&
+                      (s.rid == undefined || s.rid == layerId);
+              });
+
+              document.querySelector(`div[data-layer="${layerId}"]`)
+                      .querySelector('#videoSize').innerText = `${currRtp.frameWidth}x${currRtp.frameHeight}`;
+              document.querySelector(`div[data-layer="${layerId}"]`)
+                      .querySelector('#videoFps').innerText = `${currRtp.framesPerSecond}`;
+
+              const prevRtp =
+                  currRtp && prevReport && prevReport.get(currRtp.id);
+              if (!currRtp || !prevRtp) {
+                statsSpan.innerText = "Stats missing";
+                continue;
+              }
+              const deltaSeconds =
+                  (currRtp.timestamp - prevRtp.timestamp) / 1000;
+
+              const targetBitrateKbps =
+                  currRtp.targetBitrate ? currRtp.targetBitrate / 1000 : 0;
+              const encoderKbps =
+                  (delta(currRtp, prevRtp,
+                        s => s.bytesSent - s.retransmittedBytesSent) * 8 / 1000)
+                        / deltaSeconds;
+              const avgEncodeTimeMs =
+                  (delta(currRtp, prevRtp, s => s.totalEncodeTime) /
+                    delta(currRtp, prevRtp, s => s.framesEncoded)) * 1000;
+              const avgQp =
+                  delta(currRtp, prevRtp, s => s.qpSum) /
+                  delta(currRtp, prevRtp, s => s.framesEncoded);
+
+              statsSpan.innerText = `${currReport.get(currRtp.codecId).mimeType.substring(6)} (${currRtp.encoderImplementation})
+                scalabilityMode: ${currRtp.scalabilityMode}
+                Limitation: ${currRtp.qualityLimitationReason}
+
+                Target: ${targetBitrateKbps.toFixed(2)} kbps
+                Actual: ${encoderKbps.toFixed(2)} kbps
+                - Avg Enc Time: ${avgEncodeTimeMs.toFixed(2)} ms
+                - Avg QP: ${avgQp}
+                - Keyframes: ${currRtp.keyFramesEncoded}`;
+            } catch (e) {
+              statsSpan.innerText = e;
+            }
+          }
+        }
+        const delta = (currStats, prevStats, calc) => {
+          return calc(currStats) - calc(prevStats);
+        }
+        intervals.push(setInterval(async () => {
+          const currReport = await pc1.getStats();
+          refreshEncodingStats(currReport);
+          prevReport = currReport;
+        }, 1000));
+
+        pc1.onicecandidate = (e) => {
+          if (e.candidate) {
+            pc2.addIceCandidate(e.candidate);
+          }
+        };
+
+        pc2.onicecandidate = (e) => {
+          if (e.candidate) {
+            pc1.addIceCandidate(e.candidate);
+          }
+        };
+        pc2.ontrack = async (e) => {
+          if (e.transceiver && e.transceiver.setCodecPreferences) {
+            // Move the desired codecs in front
+
+            const wantedCodecs = RTCRtpReceiver.getCapabilities(
+              'video'
+            ).codecs.filter((c) => c.mimeType.includes(codec.value));
+            const otherCodecs = RTCRtpReceiver.getCapabilities("video").codecs.filter(
+              (c) => !c.mimeType.includes(codec.value)
+            );
+            e.transceiver.setCodecPreferences(wantedCodecs.concat(otherCodecs));
+          }
+          try {
+            if (splitLayer.value == 'merged') {
+              intervals.push(setStream(
+                  videoMerged,
+                  videoMergedSize,
+                  videoMergedFps,
+                  e.streams[0],
+              ));
+            } else {
+              console.log(
+                  'Got stream with id:' +
+                  e.streams[0].id +
+                  ' and track id:' +
+                  e.streams[0].getTracks()[0].id,
+              );
+              const streamId = e.streams[0].id;
+              const layerId = isNaN(Number(streamId)) ? 0 : streamId;
+
+              const div = document.querySelector(
+                  'div[data-layer="' + layerId + '"]',
+              );
+              div.querySelector('#videoPreview').style.display = 'inline';
+              div.querySelector('video').srcObject = e.streams[0];
+            }
+            intervals.push(
+                setInterval(async () => {
+                  const [s1, s2] = await Promise.all([
+                    pc1.getStats(),
+                    pc2.getStats(),
+                  ]);
+                  const currentTime = performance.now();
+                  const deltaTime = currentTime - lastBitrateMesurementTime;
+                  // FIXME: Instead of picking a random RTP stream, aggregate
+                  // the bytesSent for all RTP streams.
+                  const bytesSent = findStat(s1, 'outbound-rtp').bytesSent;
+                  let bytesReceived;
+                  try {
+                    bytesReceived = findStat(s2, 'inbound-rtp').bytesReceived;
+                  } catch (e) {}
+
+                  videoSourceBps.textContent =
+                  (
+                    ((bytesSent - lastBytesSent) / deltaTime) *
+                    1000 *
+                    8
+                  ).toFixed(0) + ' bps';
+                  videoMergedBps.textContent =
+                  (
+                    ((bytesReceived - lastBytesReceived) / deltaTime) *
+                    1000 *
+                    8
+                  ).toFixed(0) + ' bps';
+                  lastBitrateMesurementTime = currentTime;
+                  lastBytesSent = bytesSent;
+                  lastBytesReceived = bytesReceived;
+                }, 1000),
+            );
+          } catch (e) {
+            log(e);
+          }
+        };
+
+        pc1.oniceconnectionstatechange = (e) => log(pc1.iceConnectionState);
+        pc1.onnegotiationneeded = async (e) => {
+          let pc1Offer = await pc1.createOffer();
+          if (resolution.value.includes('-conference')) {
+            pc1Offer = addConferenceFlag(pc1Offer);
+          }
+          await pc1.setLocalDescription(pc1Offer);
+
+          const pc2Offer = {
+            type: 'offer',
+            sdp: pc1.localDescription.sdp,
+          };
+
+          if (splitLayer.value == 'split') {
+            if (pc1Offer.sdp.includes('a=simulcast:')) {
+              splitUnifiedPlanOffer(pc2Offer);
+            }
+          }
+
+          console.log('pc2 offer: ' + pc2Offer.sdp);
+          await pc2.setRemoteDescription(pc2Offer);
+
+          const answer = await pc2.createAnswer();
+          await pc2.setLocalDescription(answer);
+          let pc1Answer = {
+            type: 'answer',
+            sdp: pc2.localDescription.sdp,
+          };
+          if (splitLayer.value == 'split') {
+            if (pc1Offer.sdp.includes('a=simulcast:')) {
+              splitUnifiedPlanAnswer(pc1Answer);
+            }
+          }
+
+          if (resolution.value.includes('-conference')) {
+            pc1Answer = addConferenceFlag(pc1Answer);
+          }
+
+          console.log('pc1 answer: ' + pc1Answer.sdp);
+          await pc1.setRemoteDescription(pc1Answer);
+        };
+
+        const params = readParameters();
+        console.log(JSON.stringify(params, 0, 2));
+        transceiver = pc1.addTransceiver(stream.getVideoTracks()[0], {
+          streams: [stream],
+          sendEncodings: params.encodings,
+        });
+        sender = transceiver.sender;
+
+        lastBitrateMesurementTime = performance.now();
+        lastBytesSent = 0;
+        lastBytesReceived = 0;
+      };
+
+      const splitUnifiedPlanOffer = (offer) => {
+        let sdpLines = offer.sdp.split('\r\n');
+
+        mSectionStart = sdpLines.findIndex((line) => line.startsWith('m='));
+        mSection = sdpLines.splice(mSectionStart);
+
+        const layerRIDS = mSection
+            .filter((line) => line.startsWith('a=simulcast:'))
+            .map((line) => line.replace('a=simulcast:send ', '').split(';'))[0];
+
+        const midExtmapId = mSection
+            .filter((line) =>
+              line.includes('urn:ietf:params:rtp-hdrext:sdes:mid'),
+            )
+            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+
+        const ridExtmapId = mSection
+            .filter((line) =>
+              line.includes('urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'),
+            )
+            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+
+        sdpLines = sdpLines.map((line) => {
+          if (line.startsWith('a=group:BUNDLE')) {
+            return 'a=group:BUNDLE ' + layerRIDS.map(removeTilde).join(' ');
+          }
+
+          return line;
+        });
+
+        for (const layerName of layerRIDS) {
+          sdpLines = sdpLines.concat(
+              mSection.map((line) => {
+                if (line.match(/a=msid:/)) {
+                  return 'a=msid:' + removeTilde(layerName) + ' ' + removeTilde(layerName);
+                }
+
+                if (line.startsWith('a=mid:')) {
+                  return 'a=mid:' + removeTilde(layerName);
+                }
+
+                if (line.startsWith('a=extmap:' + midExtmapId + ' ')) {
+                  return (
+                    'a=extmap:' +
+                  midExtmapId +
+                  ' urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'
+                  );
+                }
+
+                if (line.startsWith('a=extmap:' + ridExtmapId + ' ')) {
+                  return (
+                    'a=extmap:' +
+                  ridExtmapId +
+                  ' urn:ietf:params:rtp-hdrext:sdes:mid'
+                  );
+                }
+
+                if (line.startsWith('a=rid:') || line.startsWith('a=simulcast:')) {
+                  return null;
+                }
+
+                return line;
+              }),
+          );
+        }
+
+        offer.sdp =
+          sdpLines.filter((line) => line && line.length > 0).join('\r\n') +
+          '\r\n';
+      };
+
+      const splitUnifiedPlanAnswer = (answer) => {
+        let sdpLines = answer.sdp.split('\r\n');
+
+        let mSectionStart = sdpLines.findIndex((line) => line.startsWith('m='));
+        let mSection = sdpLines.splice(mSectionStart);
+
+        // Remove extra m= sections
+        mSectionStart = mSection
+            .slice(1)
+            .findIndex((line) => line.startsWith('m='));
+        if (mSectionStart != -1) {
+          mSection.splice(mSectionStart + 1);
+        }
+
+        const midExtmapId = mSection
+            .filter((line) =>
+              line.includes('urn:ietf:params:rtp-hdrext:sdes:mid'),
+            )
+            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+
+        const ridExtmapId = mSection
+            .filter((line) =>
+              line.includes('urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'),
+            )
+            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+
+        sdpLines = sdpLines.map((line) => {
+          if (line.startsWith('a=group:BUNDLE')) {
+            return 'a=group:BUNDLE 0';
+          }
+
+          return line;
+        });
+
+        mSection = mSection.map((line) => {
+          if (line.startsWith('a=mid:')) {
+            return 'a=mid:0';
+          }
+
+          if (line.startsWith('a=extmap:' + midExtmapId + ' ')) {
+            return (
+              'a=extmap:' +
+              midExtmapId +
+              ' urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'
+            );
+          }
+
+          if (line.startsWith('a=extmap:' + ridExtmapId + ' ')) {
+            return (
+              'a=extmap:' + ridExtmapId + ' urn:ietf:params:rtp-hdrext:sdes:mid'
+            );
+          }
+
+          return line;
+        });
+
+        const params = readParameters();
+        for (const [index] of params.encodings.entries()) {
+          mSection.push('a=rid:' + index + ' recv');
+        }
+        mSection.push(
+            'a=simulcast:recv ' + params.encodings.map((e, k) => (e.active ? '' : '~') + k).join(';'),
+        );
+
+        answer.sdp =
+          sdpLines
+              .concat(mSection)
+              .filter((line) => line && line.length > 0)
+              .join('\r\n') + '\r\n';
+      };
+
+      const addConferenceFlag = (offer) => {
+        const sdpLines = offer.sdp.split('\r\n');
+
+        sdpLines.push('a=x-google-flag:conference');
+
+        offer.sdp =
+          sdpLines.filter((line) => line && line.length > 0).join('\r\n') +
+          '\r\n';
+
+        return offer;
+      };
+
+      const readParameters = (params) => {
+        // Can't use getParameters since we need this for addTransceiver too
+        const divCount = document.querySelectorAll('div[data-layer]').length;
+        if (!params) {
+          params = {
+            encodings: [],
+          };
+          for (let i = 0; i < divCount; ++i) {
+            params.encodings.push({
+              rid: i,
+            });
+          }
+        }
+
+        for (let i = 0; i < divCount; ++i) {
+          const div = document.querySelector('div[data-layer="' + i + '"]');
+          params.encodings[i].active =
+            div.querySelector('#active').value == 'on' ? true : false;
+          params.encodings[i].priority = div.querySelector('#priority').value;
+
+          const maxBitrate = div.querySelector('#maxBitrate').valueAsNumber;
+          if (isNaN(maxBitrate)) {
+            params.encodings[i].maxBitrate = undefined;
+          } else {
+            params.encodings[i].maxBitrate = maxBitrate;
+          }
+
+          const scaleResolutionDownBy = div.querySelector(
+              '#scaleResolutionDownBy',
+          ).valueAsNumber;
+          if (isNaN(scaleResolutionDownBy)) {
+            params.encodings[i].scaleResolutionDownBy = undefined;
+          } else {
+            params.encodings[i].scaleResolutionDownBy = scaleResolutionDownBy;
+          }
+
+          const maxFramerate = div.querySelector('#maxFramerate').valueAsNumber;
+          if (isNaN(maxFramerate)) {
+            params.encodings[i].maxFramerate = undefined;
+          } else {
+            params.encodings[i].maxFramerate = maxFramerate;
+          }
+
+          const scalabilityMode = div.querySelector('#scalabilityMode').value;
+          if (scalabilityMode == '') {
+            params.encodings[i].scalabilityMode = undefined;
+          } else {
+            params.encodings[i].scalabilityMode = scalabilityMode;
+          }
+
+          const forceCodec = div.querySelector("#forceCodec").value;
+          if (forceCodec == "") {
+            params.encodings[i].codec = undefined;
+          } else {
+            params.encodings[i].codec = JSON.parse(forceCodec);
+          }
+        }
+        const degradationPreferenceChoice = document.querySelector(
+            '#degradationPreference',
+        ).value;
+        if (degradationPreferenceChoice == '') {
+          params.degradationPreference = undefined;
+        } else {
+          params.degradationPreference = degradationPreferenceChoice;
+        }
+
+        return params;
+      };
+
+      document.querySelector('#start').onclick = async () => {
+        try {
+          resolutionName = resolution.value;
+          if (
+            stream &&
+            streamResolution &&
+            streamResolution != resolutionName
+          ) {
+            for (const track of stream.getVideoTracks()) {
+              track.stop();
+            }
+            stream = null;
+            if (videoSourceInterval) {
+              window.clearInterval(videoSourceInterval);
+              videoSourceInterval = null;
+            }
+          }
+          if (!stream) {
+            const constraint = {...constraints[resolutionName]};
+            constraint.video.frameRate = captureFramerate.value;
+            if (resolutionName.includes('screen')) {
+              stream = await navigator.mediaDevices.getDisplayMedia(constraint);
+            } else {
+              if (captureDevice.value !== 'default') {
+                constraint.video.deviceId = {exact: captureDevice.value};
+              }
+              stream = await navigator.mediaDevices.getUserMedia(constraint);
+            }
+            streamResolution = resolutionName;
+
+            stream.getVideoTracks()[0].contentHint = contentHint.value;
+
+            videoSourceInterval = setStream(
+                videoSource,
+                videoSourceSize,
+                videoSourceFps,
+                stream,
+            );
+          }
+
+          setupPeerConnection();
+        } catch (e) {
+          log(e);
+        }
+      };
+
+      const _serializeSetting = (settingName, settingValue) => {
+        if (typeof settingValue === 'object') {
+          return Object.keys(settingValue).map((key) => {
+            return _serializeSetting(settingName + '.' + key, settingValue[key]);
+          }).join('&');
+        }
+        return encodeURIComponent(settingName) + '=' + (settingValue ? encodeURIComponent(settingValue) : '');
+      };
+
+      const serializeSettings = (includeDeviceId) => {
+        const settings = {
+          'resolution': resolution.value,
+          'captureFramerate': captureFramerate.value,
+          'codec': codec.value,
+          'contentHint': contentHint.value,
+          'encodings': readParameters().encodings,
+          'degradationPreference': degradationPreference.value,
+          'splitLayer': splitLayer.value,
+        };
+        if (includeDeviceId) {
+          settings['device'] = captureDevice.value;
+        }
+        const queryString = Object.keys(settings).map((key) => {
+          return _serializeSetting(key, settings[key]);
+        }).join('&');
+        console.log('Parameter string: ' + queryString);
+        return queryString;
+      };
+
+      const restoreSettings = (queryString) => {
+        const params = new URLSearchParams(queryString);
+        resolution.value = params.get('resolution');
+        bookmarkDevice = params.get('device');
+        captureFramerate.value = params.get('captureFramerate');
+        codec.value = params.get('codec');
+        contentHint.value = params.get('contentHint');
+        degradationPreference.value = params.get('degradationPreference');
+        splitLayer.value = params.get('splitLayer');
+
+        const divs = document.querySelectorAll('div[data-layer]');
+        const divCount = divs.length;
+        for (let i = 0; params.has('encodings.' + i + '.rid'); ++i) {
+          if (i + 1 > divCount) {
+            document.querySelector('#addLayer').click();
+          }
+          const div = document.querySelector('div[data-layer="' + i + '"]');
+          div.querySelector('#maxBitrate').value = params.get('encodings.' + i + '.maxBitrate');
+          div.querySelector('#scaleResolutionDownBy').value = params.get('encodings.' + i + '.scaleResolutionDownBy');
+          div.querySelector('#maxFramerate').value = params.get('encodings.' + i + '.maxFramerate');
+          div.querySelector('#scalabilityMode').value = params.get('encodings.' + i + '.scalabilityMode') ?? 'none';
+          div.querySelector('#active').value = params.get('encodings.' + i + '.active') == 'true' ? 'on' : 'off';
+          div.querySelector('#priority').value = params.get('encodings.' + i + '.priority');
+          const codecObject = {
+            clockRate: parseInt(params.get('encodings.' + i + '.codec.clockRate')),
+            mimeType: params.get('encodings.' + i + '.codec.mimeType'),
+            sdpFmtpLine: params.get('encodings.' + i + '.codec.sdpFmtpLine') ?? undefined,
+          };
+          for (const option of div.querySelector('#forceCodec').options) {
+            if (option.value === '') continue;
+            const optionCodec = JSON.parse(option.value);
+            if (optionCodec.mimeType !== codecObject.mimeType) continue;
+            if (optionCodec.clockRate !== codecObject.clockRate) continue;
+            if (optionCodec.sdpFmtpLine !== codecObject.sdpFmtpLine) continue;
+
+            div.querySelector('#forceCodec').value = JSON.stringify(codecObject);
+            break;
+          }
+        }
+      };
+
+      document.querySelector('#stop').onclick = () => {
+        for (const track of stream.getVideoTracks()) {
+          track.stop();
+        }
+        stream = null;
+        if (videoSourceInterval) {
+          window.clearInterval(videoSourceInterval);
+          videoSourceInterval = null;
+        }
+        stopPeerConnection();
+      };
+
+      document.querySelector('#getParameters').onclick = async () => {
+        if (!sender) {
+          log('Start the stream first!');
+          return;
+        }
+        const params = sender.getParameters();
+        log('Video parameters: ' + JSON.stringify(params, 0, 2));
+        if (asender) {
+          const aparams = asender.getParameters();
+          log('Audio parameters: ' + JSON.stringify(aparams, 0, 2));
+        }
+      };
+
+      document.querySelector('#setParameters').onclick = async () => {
+        if (!sender) {
+          log('Start the stream first!');
+          return;
+        }
+        let params = sender.getParameters();
+        params = readParameters(params);
+        log(
+            'Setting encoding parameters: ' +
+            JSON.stringify(params.encodings, (k, v) => v === undefined ? null : v, 2) +
+            '\ndegradationPreference: ' +
+            params.degradationPreference,
+        );
+        try {
+          await sender.setParameters(params);
+        } catch (e) {
+          log(e);
+        }
+      };
+
+      document.querySelector('#receiverGetParameters').onclick = async () => {
+        if (!sender) {
+          log('Start the stream first!');
+          return;
+        }
+        const params = pc2.getReceivers()[0].getParameters();
+        log('Receiver Video parameters: ' + JSON.stringify(params, 0, 2));
+      };
+
+      document.querySelector('#addLayer').onclick = async () => {
+        const divs = document.querySelectorAll('div[data-layer]');
+        const divCount = divs.length;
+
+        const newDiv = divs[0].cloneNode(true);
+        divs[divCount - 1].insertAdjacentElement('afterend', newDiv);
+        newDiv.dataset.layer = divCount;
+        newDiv.querySelector('span').textContent = divCount;
+
+        if (stream) {
+          setupPeerConnection();
+        }
+      };
+
+      document.querySelector('#removeLayer').onclick = async () => {
+        const divs = document.querySelectorAll('div[data-layer]');
+        if (divs.length <= 1) return;
+
+        divs[divs.length - 1].remove();
+
+        if (stream) {
+          setupPeerConnection();
+        }
+      };
+
+      document.querySelector('#copyBookmark').onclick = async () => {
+        const url = location.origin + location.pathname + '?' + serializeSettings(false);
+        await navigator.clipboard.writeText(url);
+        log('Copied to clipboard: ' + url);
+      };
+
+      document.querySelector('#copyBookmarkWithDevice').onclick = async () => {
+        const url = location.origin + location.pathname + '?' + serializeSettings(true);
+        await navigator.clipboard.writeText(url);
+        log('Copied to clipboard: ' + url);
+      };
+
+      document.querySelector('#splitLayer').onchange = () => {
+        if (stream) {
+          setupPeerConnection();
+        }
+      };
+
+      document.querySelector('#codec').onchange = () => {
+        if (stream) {
+          setupPeerConnection();
+        }
+      };
+
+      const setStream = (video, videoSize, videoFps, stream) => {
+        video.srcObject = stream;
+        video.onloadedmetadata = (e) => {
+          videoSize.textContent = video.videoWidth + 'x' + video.videoHeight;
+        };
+
+        video.onresize = (e) => {
+          videoSize.textContent = video.videoWidth + 'x' + video.videoHeight;
+        };
+
+        return window.setInterval(
+            ((fpsBox, track) => {
+              const frameRate = track.getSettings().frameRate;
+              if (frameRate) {
+                fpsBox.textContent = frameRate.toFixed(1);
+              }
+            }).bind(null, videoFps, stream.getTracks()[0]),
+            1000);
+      };
+
+      const videoFullscreen = (e) => {
+        console.log(e);
+        const videoPlayer = e.closest("div.VideoPlayer");
+        const videoElement = videoPlayer.querySelector("video");
+        videoElement.requestFullscreen();
+      }
+
+      const videoRecord = async (e) => {
+        const encodingBox = e.closest("div.encodingBox");
+        const layer = encodingBox ? Number(encodingBox.dataset.layer) : 0;
+        e.classList.toggle("blink");
+
+        if (recorders[layer]) {
+          // We have a recording on-going, stop and add the file to the download list
+          recorders[layer].mediaRecorder.stop();
+          const recording = {
+            name: recorders[layer].name,
+            chunks: [],
+          };
+          recordings.push(recording);
+
+          let dataRecordedResolve;
+          const dataRecorded = new Promise(r => dataRecordedResolve = r);
+
+          recorders[layer].mediaRecorder.addEventListener('dataavailable', e => {
+            if (e.data.size > 0) {
+              recording.chunks.push(e.data);
+              dataRecordedResolve();
+            }
+          });
+
+          await dataRecorded;
+
+          delete recorders[layer];
+
+          recordingListBox.style.display = "inline";
+
+          const details = document.createElement("details");
+          const summary = document.createElement("summary");
+          summary.innerText = `${recording.name} `;
+
+          const downloadLink = document.createElement("a");
+          downloadLink.href = URL.createObjectURL(recording.chunks[0]);
+          downloadLink.download = `${recording.name}.webm`;
+          downloadLink.innerText = "Download";
+          summary.appendChild(downloadLink);
+
+          details.appendChild(summary);
+
+          const video = document.createElement("video");
+          video.controls = true;
+          video.muted = true;
+          video.src = downloadLink.href;
+          details.appendChild(video);
+
+          recordingList.appendChild(details);
+
+        } else {
+          // No recording on-going for this layer, start one
+          const tracks = [pc2.getReceivers()[layer].track];
+          options = {}  // Enable passthrough if situation allows
+          const mediaRecorder = new MediaRecorder(new MediaStream(tracks), options);
+
+          mediaRecorder.start()
+          recorders[layer] = {
+            mediaRecorder,
+            name: await getRecordingName(layer),
+          }
+        }
+      }
+
+      getRecordingName = async (layerId) => {
+        downloadName = {};
+        const parameters = readParameters();
+
+        // Get the used codec
+        const stats = await pc1.getStats();
+        const outboundRtp = [...stats.values()].find(s => {
+                return s.type == 'outbound-rtp' &&
+                      (s.rid == undefined || s.rid == layerId);
+              });
+        const codec = stats.get(outboundRtp.codecId).mimeType.substring(6);
+        const sharingOption = sender.track.getSettings().displaySurface ?? "camera";
+        const bitrate = parameters.encodings[layerId].maxBitrate / 1000;
+        const framerate = parameters.encodings[layerId].maxFramerate;
+        // Remove ':' from the date as those are not valid Windows file name characters
+        const date = new Date().toISOString().replaceAll(':', '_');
+
+        const name = `layer${layerId}_${sharingOption}_${codec}_${bitrate}kbps_${framerate}fps_${date}`;
+        return name;
+      }
+
+
+      const is = (stat, type) => stat.type == type && !stat.isRemote; // skip RTCP
+      const findStat = (map, type) =>
+        [...map.values()].find((stat) => is(stat, type));
+
+      const log = (msg) => {
+        const pre = document.createElement('pre');
+        pre.innerText = msg;
+        div.appendChild(pre);
+      };
+
+      const forceCodec = document.querySelector("#forceCodec");
+      const skipCodecs = ["video/red", "video/rtx", "video/ulpfec"];
+      for (const codec of RTCRtpSender.getCapabilities("video").codecs) {
+        if (skipCodecs.includes(codec.mimeType)) continue;
+
+        const option = document.createElement("option");
+        option.value = JSON.stringify(codec);
+        option.text = codec.mimeType.split("/")[1];
+        if (codec.sdpFmtpLine) {
+          option.text += " / " + codec.sdpFmtpLine;
+        }
+        forceCodec.appendChild(option);
+      }
+
+      if (window.location.search.length > 1) {
+        restoreSettings(window.location.search);
+      }
+
+      (async () => {
+        // Enumerate all devices
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: true,
+        });
+
+        const deviceInfos = await navigator.mediaDevices.enumerateDevices();
+        const captureDevice = document.querySelector('#captureDevice');
+        for (const deviceInfo of deviceInfos) {
+          if (deviceInfo.kind !== 'videoinput') continue;
+
+          const option = document.createElement('option');
+          option.value = deviceInfo.deviceId;
+          option.text = deviceInfo.label;
+          captureDevice.appendChild(option);
+        }
+
+        for (const track of mediaStream.getTracks()) {
+          track.stop();
+        }
+
+        // Restore saved device
+        if (bookmarkDevice) {
+          captureDevice.value = bookmarkDevice;
+        }
+      })();
+    </script>
+  </body>
+</html>
