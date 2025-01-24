@@ -678,13 +678,13 @@
             .filter((line) =>
               line.includes('urn:ietf:params:rtp-hdrext:sdes:mid'),
             )
-            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+            .map((line) => /a=extmap:(\d+)/.exec(line).at(1));
 
         const ridExtmapId = mSection
             .filter((line) =>
               line.includes('urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'),
             )
-            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+            .map((line) => /a=extmap:(\d+)/.exec(line).at(1));
 
         const ssrcGroups = mSection
             .filter((line) =>
