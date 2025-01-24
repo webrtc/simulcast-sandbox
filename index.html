@@ -692,6 +692,8 @@
             )
             .map((line) => line.replace('a=ssrc-group:FID ', '').split(' '));
 
+        const hasSsrcGroups = ssrcGroups.length == layerRIDS.length;
+
         sdpLines = sdpLines.map((line) => {
           if (line.startsWith('a=group:BUNDLE')) {
             return 'a=group:BUNDLE ' + layerRIDS.map(removeTilde).join(' ');
@@ -715,6 +717,9 @@
                 }
 
                 if (line.startsWith('a=extmap:' + midExtmapId + ' ')) {
+                  if (hasSsrcGroups) {
+                    return null;
+                  }
                   return (
                     'a=extmap:' +
                   midExtmapId +
@@ -722,12 +727,20 @@
                   );
                 }
 
-                if (line.startsWith('a=extmap:' + ridExtmapId + ' ')) {
+                if (line.match(/^a=extmap:.* urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id/)) {
+                  if (hasSsrcGroups) {
+                    return null;
+                  }
                   return (
                     'a=extmap:' +
                   ridExtmapId +
                   ' urn:ietf:params:rtp-hdrext:sdes:mid'
                   );
+                }
+
+                if (hasSsrcGroups &&
+                    line.match(/^a=extmap:.* urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id/)) {
+                  return null;
                 }
 
                 if (line.startsWith('a=rid:') || line.startsWith('a=simulcast:')) {
