@@ -686,6 +686,12 @@
             )
             .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
 
+        const ssrcGroups = mSection
+            .filter((line) =>
+              line.includes('a=ssrc-group:FID '),
+            )
+            .map((line) => line.replace('a=ssrc-group:FID ', '').split(' '));
+
         sdpLines = sdpLines.map((line) => {
           if (line.startsWith('a=group:BUNDLE')) {
             return 'a=group:BUNDLE ' + layerRIDS.map(removeTilde).join(' ');
@@ -694,7 +700,10 @@
           return line;
         });
 
-        for (const layerName of layerRIDS) {
+        for (const [i, layerName] of layerRIDS.entries()) {
+          const ssrcGroup = ssrcGroups.at(i);
+          const ssrc = ssrcGroup?.at(0);
+          const rtxSsrc = ssrcGroup?.at(1);
           sdpLines = sdpLines.concat(
               mSection.map((line) => {
                 if (line.match(/a=msid:/)) {
@@ -722,6 +731,17 @@
                 }
 
                 if (line.startsWith('a=rid:') || line.startsWith('a=simulcast:')) {
+                  return null;
+                }
+
+                if (line.startsWith('a=ssrc:') &&
+                    !line.startsWith(`a=ssrc:${ssrc}`) &&
+                    !line.startsWith(`a=ssrc:${rtxSsrc}`)) {
+                  return null;
+                }
+
+                if (line.startsWith('a=ssrc-group:FID') &&
+                    !line.startsWith(`a=ssrc-group:FID ${ssrc}`)) {
                   return null;
                 }
 
