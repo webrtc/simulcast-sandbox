@@ -628,7 +628,8 @@
             }
           }
 
-          console.log('pc2 offer: ' + pc2Offer.sdp);
+          console.log('pc1 local offer: ' + pc1Offer.sdp);
+          console.log('pc2 remote offer: ' + pc2Offer.sdp);
           await pc2.setRemoteDescription(pc2Offer);
 
           const answer = await pc2.createAnswer();
@@ -647,7 +648,8 @@
             pc1Answer = addConferenceFlag(pc1Answer);
           }
 
-          console.log('pc1 answer: ' + pc1Answer.sdp);
+          console.log('pc2 local answer: ' + answer.sdp);
+          console.log('pc1 remote answer: ' + pc1Answer.sdp);
           await pc1.setRemoteDescription(pc1Answer);
         };
 
