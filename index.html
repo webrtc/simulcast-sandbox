@@ -1231,7 +1231,7 @@
 
       const forceCodec = document.querySelector("#forceCodec");
       const skipCodecs = ["video/red", "video/rtx", "video/ulpfec"];
-      for (const codec of RTCRtpSender.getCapabilities("video").codecs) {
+      for (const codec of RTCRtpReceiver.getCapabilities("video").codecs) {
         if (skipCodecs.includes(codec.mimeType)) continue;
 
         const option = document.createElement("option");
