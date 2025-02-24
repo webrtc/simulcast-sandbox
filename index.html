@@ -628,7 +628,8 @@
             }
           }
 
-          console.log('pc2 offer: ' + pc2Offer.sdp);
+          console.log('pc1 local offer: ' + pc1Offer.sdp);
+          console.log('pc2 remote offer: ' + pc2Offer.sdp);
           await pc2.setRemoteDescription(pc2Offer);
 
           const answer = await pc2.createAnswer();
@@ -647,7 +648,8 @@
             pc1Answer = addConferenceFlag(pc1Answer);
           }
 
-          console.log('pc1 answer: ' + pc1Answer.sdp);
+          console.log('pc2 local answer: ' + answer.sdp);
+          console.log('pc1 remote answer: ' + pc1Answer.sdp);
           await pc1.setRemoteDescription(pc1Answer);
         };
 
@@ -678,13 +680,21 @@
             .filter((line) =>
               line.includes('urn:ietf:params:rtp-hdrext:sdes:mid'),
             )
-            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+            .map((line) => /a=extmap:(\d+)/.exec(line).at(1));
 
         const ridExtmapId = mSection
             .filter((line) =>
               line.includes('urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id'),
             )
-            .map((line) => line.replace('a=extmap:', '').split(' ')[0])[0];
+            .map((line) => /a=extmap:(\d+)/.exec(line).at(1));
+
+        const ssrcGroups = mSection
+            .filter((line) =>
+              line.includes('a=ssrc-group:FID '),
+            )
+            .map((line) => line.replace('a=ssrc-group:FID ', '').split(' '));
+
+        const hasSsrcGroups = ssrcGroups.length == layerRIDS.length;
 
         sdpLines = sdpLines.map((line) => {
           if (line.startsWith('a=group:BUNDLE')) {
@@ -694,7 +704,10 @@
           return line;
         });
 
-        for (const layerName of layerRIDS) {
+        for (const [i, layerName] of layerRIDS.entries()) {
+          const ssrcGroup = ssrcGroups.at(i);
+          const ssrc = ssrcGroup?.at(0);
+          const rtxSsrc = ssrcGroup?.at(1);
           sdpLines = sdpLines.concat(
               mSection.map((line) => {
                 if (line.match(/a=msid:/)) {
@@ -706,6 +719,9 @@
                 }
 
                 if (line.startsWith('a=extmap:' + midExtmapId + ' ')) {
+                  if (hasSsrcGroups) {
+                    return null;
+                  }
                   return (
                     'a=extmap:' +
                   midExtmapId +
@@ -713,7 +729,10 @@
                   );
                 }
 
-                if (line.startsWith('a=extmap:' + ridExtmapId + ' ')) {
+                if (line.match(/^a=extmap:.* urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id/)) {
+                  if (hasSsrcGroups) {
+                    return null;
+                  }
                   return (
                     'a=extmap:' +
                   ridExtmapId +
@@ -721,7 +740,23 @@
                   );
                 }
 
+                if (hasSsrcGroups &&
+                    line.match(/^a=extmap:.* urn:ietf:params:rtp-hdrext:sdes:repaired-rtp-stream-id/)) {
+                  return null;
+                }
+
                 if (line.startsWith('a=rid:') || line.startsWith('a=simulcast:')) {
+                  return null;
+                }
+
+                if (line.startsWith('a=ssrc:') &&
+                    !line.startsWith(`a=ssrc:${ssrc}`) &&
+                    !line.startsWith(`a=ssrc:${rtxSsrc}`)) {
+                  return null;
+                }
+
+                if (line.startsWith('a=ssrc-group:FID') &&
+                    !line.startsWith(`a=ssrc-group:FID ${ssrc}`)) {
                   return null;
                 }
 
